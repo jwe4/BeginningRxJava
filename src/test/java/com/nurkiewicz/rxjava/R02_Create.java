@@ -29,6 +29,7 @@ public class R02_Create {
 	public void observableUsingCreate() throws Exception {
 		Observable<String> obs = Observable.create(emitter -> {
 			emitter.onNext("A");
+			emitter.onNext("B");
 			emitter.onComplete();
 		});
 		
@@ -89,9 +90,12 @@ public class R02_Create {
 		DataSource ds = mock(DataSource.class);
 		
 		Observable<Integer> obs = queryDatabase(ds);
+		obs = obs.cache();
+		// every operator returns a new observable
 		
+		obs.cache().subscribe();
 		obs.subscribe();
-		obs.subscribe();
+
 		
 		verify(ds, times(1)).getConnection();
 	}
@@ -100,6 +104,7 @@ public class R02_Create {
 		return Observable.create(sub -> {
 			try (Connection conn = ds.getConnection()) {
 				sub.onComplete();
+
 			} catch (SQLException e) {
 				sub.onError(e);
 			}
@@ -117,7 +122,8 @@ public class R02_Create {
 				sub.onNext(i++);
 			}
 		});
-		
+
+
 		TestObserver<Integer> subscriber = obs
 				.skip(10)
 				.take(3)
@@ -134,9 +140,10 @@ public class R02_Create {
 		Observable<Integer> obs = Observable.create(sub ->
 				runInBackground(() -> {
 							int i = 0;
-							while (true) {
+							while (!sub.isDisposed()) {
 								sub.onNext(i++);
 							}
+							sub.onComplete();
 						}
 				)
 		);
