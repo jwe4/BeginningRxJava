@@ -31,6 +31,11 @@ public class R21_FlatMap {
      * Optional<Optional<T>>
      *     ...
      * want to use flatMap ... subscribes to inner stream and pushes to the outer stream
+     *
+     * Hint: Flowable.toMap(), point here is that need to get parallelism on the flat map
+     * for it do do anything
+     *
+     * NOTE there is a default limit on concurrency in flatMap, it is 128
      */
     @Test
     public void shouldDownloadAllUrlsInArbitraryOrder() throws Exception {
@@ -63,15 +68,18 @@ public class R21_FlatMap {
 //		Map<URI, String> bodies = null; //urls...
         // Single is a Flowable that has one item in it
 
-        // URL vs URI -- URI much better for performance
+        // URL vs URI -- URI much better for performance, url does a dns access I think
+        // to compare two url you make a dns query, if network goes down, comparison
+        // is by string ... this means that url can be equal with dns access and not
+        // when a string comparison is done, note that a Single is a Flowable with one element
         final Map<URI, String> bodies =Urls.all()
                 .subscribeOn(Schedulers.io())
-                .flatMap(url->
+                .flatMap(url->  // this flatMap returns a Flowable<String>  or it does it without the map
                         UrlDownloader.download(url)
                                 .map( s-> Pair.of(url,s))
-                                .subscribeOn(Schedulers.io())
+                                .subscribeOn(Schedulers.io()), 1000  // increasing the concurrency here -- default is 128
                 ).toMap( p-> p.getLeft().toURI(), p->p.getRight())
-                .blockingGet();
+                .blockingGet();  // works on a Single
 
         //then
         assertThat(bodies).hasSize(996);
@@ -118,3 +126,12 @@ public class R21_FlatMap {
     }
 
 }
+
+/*
+
+ flatMap         -- creates all threads and subscribe to all at the same time
+ concatMap       -- is same as flatMap with maxConcurrencey 1, concatMap preserves order, no concurrency
+ concatMapEager  -- allows concurrency but still preserves order, will wait as necessary for threads to complete before
+                 -- releasing the result,  disadvantage is that a slow thread can block others also holds onto resource
+
+ */
